@@ -9,7 +9,8 @@ class graph_chase:
     def __init__(self,num_node,edge_prob):
         self.num_node = num_node
         self.edge_prob = edge_prob
-        
+        self.step_decay = -0.01
+        self.shortest_dist = 30
         self.G = None
         self.current_location = None
         self.previous_location = None
@@ -28,7 +29,7 @@ class graph_chase:
         # plt.show(
     
     def reset(self,):
-        # build graph
+        # 建图
         while True:
             self.G = build_graph(self.num_node, self.edge_prob)
             number_components = nx.number_connected_components(self.G)
@@ -45,21 +46,77 @@ class graph_chase:
         self.set_location()
         self.previous_location = self.current_location
         
+        # 邻接矩阵
+        ad_matrix = np.array(nx.adjacency_matrix(self.G).todense())
+        # 生成observation
+        obs = self.get_obs()
         
+        return obs
+    
+    def get_obs(self):
+        '''
+        obs是不定长矩阵
+        [
+            [current_loaction, value, 0]
+            [target_loaction, value, 0]
+            [neighbor_current, value, weight]
+            ...
+            [neighbor_current, value, weight]
+            [neighbor_target, value, weight]
+            ...
+            [neighbor_target, value, weight]
+        ]
+        '''
+        obs = [
+                [self.current_location, self.G.nodes[self.current_location]['value'], 0.],
+                [self.target_location, self.G.nodes[self.target_location]['value'], 0.]
+                ]
+        neighbor = self.get_neighbor(self.current_location)
+        for i in neighbor:
+            obs.append([i, self.G.nodes[i]['value'], self.G[self.current_location][i]['weight']])
         
+        neighbor = self.get_neighbor(self.target_location)
+        for i in neighbor:
+            obs.append([i, self.G.nodes[i]['value'], self.G[self.target_location][i]['weight']])
+        
+        return np.array(obs)
+    
     def update_value(self,):
         '''
         更新节点数值
         '''
-        
-    def step(self, action):
         pass
+
+    def is_done(self):
+        if self.current_location == self.target_location:
+            return True
+        else:
+            return False
+
+    def step(self, action):
+        neighbor = self.get_neighbor(self.current_location)
+        if action in neighbor:
+            self.current_location = action
+            reward = self.G[self.current_location][self.previous_location]['weight'] + self.step_decay
+            self.previous_location = self.current_location
+        else:
+            reward = self.step_decay
+        
+        obs = self.get_obs()
+        done = self.is_done()
+        info = None
+        return obs, reward, done, info
     
     def set_location(self,):
+        dist = 0
         node_list = list(self.G.nodes)
         self.current_location = random.choice(node_list)
         node_list.pop(self.current_location)
-        self.target_location = random.choice(node_list)
+        while dist <= self.shortest_dist:
+            
+            self.target_location = random.choice(node_list)
+            dist = self.get_shortest_path()
+            print(dist)
         
         
     def set_value(self, n, v):
@@ -91,6 +148,14 @@ class graph_chase:
         # print(self.G[node])
         return list(nei)
 
+    def get_shortest_path(self):
+        '''
+        计算current和target的距离
+        '''
+        path = nx.shortest_path(self.G, source=self.current_location, target=self.target_location)
+        return len(path)
+
+
 def build_graph(num_node, prob):
     '''
     num_node
@@ -114,10 +179,22 @@ def build_graph(num_node, prob):
     return G
 
 
+np.random.seed(10)
+random.seed(10)
 
-env = graph_chase(num_node=20, edge_prob=0.4)
-# env.set_edges()
-# print(list(env.G.edges.data())[0])
-# env.get_neighbor(15)
+env = graph_chase(num_node=200, edge_prob=0.05)
 env.reset()
-# env.set_location()
+
+for _ in range(10):
+    obs = env.reset()
+    print(len(env.get_path()))
+    done = False
+    reward = 0
+    step = 0
+    while not done:
+        action = np.random.randint(200)
+        obs, r, done, info = env.step(action)
+        reward += r
+        step += 1
+    print(step, reward)
+
