@@ -2,8 +2,24 @@ import networkx as nx
 import numpy as np
 import random			  
 import matplotlib.pyplot as plt
+from sympy import total_degree
 
 
+
+def combinatorial(n,m):
+    # 计算组合数C(n,m)=n!/((n-m)!*m!)
+
+    def factorial(n):
+    # 计算阶乘
+        a = 1
+        for i in range(1,n+1):
+            a = a * i
+        return a
+
+    n_fac = factorial(n)
+    m_fac = factorial(m)
+    n_m_fac = factorial(n-m)
+    return n_fac / (n_m_fac*m_fac)
 
 class graph_chase:
     def __init__(self,num_node,edge_prob):
@@ -35,7 +51,7 @@ class graph_chase:
             number_components = nx.number_connected_components(self.G)
             largest_components = max(nx.connected_components(self.G), key=len)
             # 保证整个图是连通的
-            if len(largest_components) == self.num_node:
+            if len(largest_components) >= int(0.95*self.num_node):
                 break
             
         # 设置node和edge的数值
@@ -164,17 +180,26 @@ def build_graph(num_node, prob):
     G = nx.Graph()
     H = nx.path_graph(num_node) # 利用path_graph添加节点，不用path_graph中的edge，path_graph即链图
     G.add_nodes_from(H)
+    total_edges = combinatorial(num_node,2)
 
     def rand_edge(vi,vj,p):
         probability =random.random()
         if(probability<p):
-            G.add_edge(vi,vj)   
+            G.add_edge(vi,vj)  
+    count = 0
     i=0
     while (i<num_node):
         j=0
         while(j<i):
-                rand_edge(i,j,p=prob)
-                j +=1
+            if count <= int(0.3*total_edges):
+                prob = 0.4
+            elif count > int(0.3*total_edges) and count <= int(0.6*total_edges):
+                prob = 0.2
+            elif count > int(0.6*total_edges) and count <= total_edges:
+                prob = 0.01
+            rand_edge(i,j,p=prob)
+            j +=1
+            count += 1
         i +=1
     return G
 
@@ -187,7 +212,7 @@ env.reset()
 
 for _ in range(10):
     obs = env.reset()
-    print(len(env.get_path()))
+    print(len(env.get_shortest_path()))
     done = False
     reward = 0
     step = 0
